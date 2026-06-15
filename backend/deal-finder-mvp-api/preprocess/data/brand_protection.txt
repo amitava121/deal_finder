@@ -1,0 +1,79 @@
+# Brand Protection List
+# These words will NEVER be spell-corrected
+# Add brands here without code changes
+
+# Phone brands
+iqoo
+nothing
+poco
+realme
+xiaomi
+redmi
+oneplus
+oppo
+vivo
+samsung
+apple
+iphone
+ipad
+macbook
+nokia
+motorola
+sony
+lg
+asus
+htc
+
+# Audio brands
+jbl
+bose
+beats
+skullcandy
+sennheiser
+akg
+anker
+belkin
+logitech
+razer
+corsair
+hyperx
+
+# Camera brands
+canon
+nikon
+fujifilm
+gopro
+dji
+insta360
+
+# Laptop brands
+dell
+hp
+lenovo
+acer
+microsoft
+surface
+
+# Indian brands
+boat
+noise
+fireboltt
+boult
+mivi
+ptron
+
+# E-commerce platforms
+flipkart
+amazon
+myntra
+ajio
+meesho
+snapdeal
+nykaa
+bewakoof
+zepto
+blinkit
+swiggy
+zomato
+
+testbrand

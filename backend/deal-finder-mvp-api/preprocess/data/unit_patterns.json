@@ -1,0 +1,19 @@
+{
+  "_description": "Unit normalization patterns. Edit without code changes.",
+  "patterns": {
+    "taka": "rupees",
+    "takar": "rupees",
+    "rupaye": "rupees",
+    "rupya": "rupees",
+    "rupi": "rupees",
+    "rs": "rupees",
+    "inr": "rupees",
+    "tk": "rupees",
+    "pcs": "pieces",
+    "pc": "pieces",
+    "kg": "kilogram",
+    "gm": "gram",
+    "ltr": "liter",
+    "ml": "milliliter"
+  }
+}

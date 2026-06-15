@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Data Migration - Smart Deal Finder</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", system-ui, sans-serif;
+        background: #0a0a0f;
+        color: #e2e8f0;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .container {
+        max-width: 600px;
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        padding: 40px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      h1 {
+        font-size: 2rem;
+        margin-bottom: 10px;
+        background: linear-gradient(135deg, #a78bfa, #f472b6);
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      p {
+        color: #94a3b8;
+        margin-bottom: 20px;
+      }
+      .status {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 12px;
+        padding: 16px 20px;
+        margin: 10px 0;
+        font-family: monospace;
+        font-size: 0.9rem;
+        min-height: 50px;
+      }
+      .btn {
+        background: linear-gradient(135deg, #7c3aed, #ec4899);
+        color: white;
+        border: none;
+        padding: 14px 32px;
+        border-radius: 12px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        width: 100%;
+        margin-top: 20px;
+        transition: opacity 0.2s;
+      }
+      .btn:hover {
+        opacity: 0.9;
+      }
+      .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .success {
+        color: #4ade80;
+      }
+      .error {
+        color: #f87171;
+      }
+      .info {
+        color: #60a5fa;
+      }
+      .spinner {
+        display: inline-block;
+        width: 16px;
+        height: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        border-top-color: #fff;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-right: 8px;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .progress {
+        width: 100%;
+        height: 6px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 3px;
+        margin: 15px 0;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #7c3aed, #ec4899);
+        width: 0%;
+        transition: width 0.3s;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Data Migration</h1>
+      <p>
+        Migrate your wishlist and search history from Firebase Firestore to
+        Supabase PostgreSQL.
+      </p>
+
+      <div class="status" id="status">Waiting for login...</div>
+      <div class="progress">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <button class="btn" id="migrateBtn" disabled>Start Migration</button>
+      <button
+        class="btn"
+        id="goHomeBtn"
+        style="margin-top: 10px; background: #334155"
+        onclick="location.href = 'index.html'"
+      >
+        Go to Home
+      </button>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script>
+      const API_BASE = "http://127.0.0.1:8000";
+
+      const firebaseConfig = {
+        apiKey: "YOUR_FIREBASE_API_KEY",
+        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+        messagingSenderId: "YOUR_SENDER_ID",
+        appId: "1:YOUR_SENDER_ID:web:d3e16a1e58aa0ee558d433",
+      };
+
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+      const db = firebase.firestore();
+
+      const statusEl = document.getElementById("status");
+      const progressBar = document.getElementById("progressBar");
+      const migrateBtn = document.getElementById("migrateBtn");
+
+      function log(msg, type = "info") {
+        const span = document.createElement("div");
+        span.className = type;
+        span.textContent = msg;
+        statusEl.appendChild(span);
+        statusEl.scrollTop = statusEl.scrollHeight;
+      }
+
+      function setProgress(pct) {
+        progressBar.style.width = pct + "%";
+      }
+
+      let currentUser = null;
+
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          currentUser = user;
+          statusEl.innerHTML = "";
+          log(`Logged in as: ${user.displayName || user.email}`, "success");
+          migrateBtn.disabled = false;
+        } else {
+          statusEl.innerHTML = "";
+          log("Please login first. Redirecting to login...", "error");
+          setTimeout(() => (location.href = "login.html"), 1500);
+        }
+      });
+
+      async function postJSON(url, body) {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return res.json();
+      }
+
+      migrateBtn.addEventListener("click", async () => {
+        if (!currentUser) return;
+        migrateBtn.disabled = true;
+        statusEl.innerHTML = "";
+        setProgress(0);
+
+        const uid = currentUser.uid;
+        let migratedWishlist = 0;
+        let migratedHistory = 0;
+        let errors = 0;
+
+        try {
+          // 1. Migrate wishlist
+          log("Reading wishlist from Firestore...");
+          const wishlistSnap = await db
+            .collection("users")
+            .doc(uid)
+            .collection("wishlist")
+            .get();
+          const wishlistItems = [];
+          wishlistSnap.forEach((doc) =>
+            wishlistItems.push({ id: doc.id, ...doc.data() }),
+          );
+          log(
+            `Found ${wishlistItems.length} wishlist items in Firestore`,
+            "info",
+          );
+
+          for (let i = 0; i < wishlistItems.length; i++) {
+            const item = wishlistItems[i];
+            try {
+              // Map Firestore fields to API format
+              const product = {
+                id: item.id || item.productId || String(i),
+                title: item.title || item.name || "Unknown",
+                brand: item.brand || "",
+                platform: item.platform || item.store || "",
+                category: item.category || "",
+                original_price: item.originalPrice || item.original_price || 0,
+                price: item.price || item.currentPrice || 0,
+                discount: item.discount || 0,
+                rating: item.rating || 0,
+                reviews: item.reviews || item.reviewCount || 0,
+                image: item.image || item.imageUrl || item.thumbnail || "",
+                affiliate_url:
+                  item.affiliateUrl || item.affiliate_url || item.link || "",
+              };
+              await postJSON(`${API_BASE}/wishlist/${uid}`, { product });
+              migratedWishlist++;
+            } catch (e) {
+              errors++;
+              log(`Error migrating wishlist item ${i}: ${e.message}`, "error");
+            }
+            setProgress(((i + 1) / (wishlistItems.length || 1)) * 50);
+          }
+
+          // 2. Migrate search history
+          log("Reading search history from Firestore...");
+          const historySnap = await db
+            .collection("users")
+            .doc(uid)
+            .collection("searchHistory")
+            .orderBy("timestamp", "desc")
+            .get();
+          const historyItems = [];
+          historySnap.forEach((doc) =>
+            historyItems.push({ id: doc.id, ...doc.data() }),
+          );
+          log(
+            `Found ${historyItems.length} search history entries in Firestore`,
+            "info",
+          );
+
+          for (let i = 0; i < historyItems.length; i++) {
+            const item = historyItems[i];
+            try {
+              const filters = item.filters || {};
+              await postJSON(`${API_BASE}/history/${uid}`, {
+                query: item.query || item.searchTerm || "",
+                platform: filters.platform || item.platform || null,
+                category: filters.category || item.category || null,
+                brand: filters.brand || item.brand || null,
+                minDiscount: filters.minDiscount || item.minDiscount || null,
+              });
+              migratedHistory++;
+            } catch (e) {
+              errors++;
+              log(`Error migrating history item ${i}: ${e.message}`, "error");
+            }
+            setProgress(50 + ((i + 1) / (historyItems.length || 1)) * 50);
+          }
+
+          // 3. Sync user profile
+          log("Syncing user profile...");
+          await postJSON(`${API_BASE}/auth/sync`, {
+            uid: uid,
+            email: currentUser.email,
+            display_name: currentUser.displayName,
+            photo_url: currentUser.photoURL,
+            provider: "firebase",
+          });
+
+          log(`\nMigration complete!`, "success");
+          log(`Wishlist: ${migratedWishlist} items migrated`, "success");
+          log(`Search History: ${migratedHistory} entries migrated`, "success");
+          if (errors) log(`Errors: ${errors}`, "error");
+          log("You can now use the app normally.", "success");
+
+          setTimeout(() => {
+            if (confirm("Migration complete! Go to wishlist page?")) {
+              location.href = "wishlist.html";
+            }
+          }, 1000);
+        } catch (err) {
+          log(`Migration failed: ${err.message}`, "error");
+          migrateBtn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
